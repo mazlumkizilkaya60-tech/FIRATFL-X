@@ -1,120 +1,113 @@
-import { createI18n } from '../core/i18n/translations.js';
-import { renderContinueCard, renderLiveMiniCard, renderMediaCard } from '../components/cards.js';
-import { buildRoute } from '../router/routes.js';
+// Python home page template'ini JavaScript'e çevir
+import { getHomeData } from '../app.js';
 
-export function renderHomePage({ state, library, language = 'tr' }) {
-  const t = createI18n(language);
-  const heroItem = library.featured[0] || library.movies[0] || library.series[0];
-  const continueWatching = state.user.continueWatching.slice(0, 6);
-  const movieRail = library.movies.slice(0, 8);
-  const seriesRail = library.series.slice(0, 6);
-  const liveRail = library.live.slice(0, 4);
+export class HomePage {
+  constructor(container) {
+    this.container = container;
+    this.data = null;
+    this.isLoading = false;
+  }
 
-  return `
-    <section class="dashboard-stack">
-      <section class="hero-stage">
-        <article class="hero-stage__feature">
-          <div class="hero-stage__backdrop">
-            <img src="${heroItem?.backdrop || heroItem?.poster || './images/poster-fallback.svg'}" alt="${heroItem?.title || 'Hero'}">
-          </div>
-          <div class="hero-stage__overlay"></div>
-          <div class="hero-stage__content">
-            <span class="hero-stage__eyebrow">${library.hero?.eyebrow || t('home_default_eyebrow')}</span>
-            <h1>${library.hero?.title || t('home_default_title')}</h1>
-            <p>${library.hero?.summary || ''}</p>
-            <div class="hero-stage__meta">
-              <span>${t('home_movies_count', { count: library.movies.length })}</span>
-              <span>${t('home_series_count', { count: library.series.length })}</span>
-              <span>${t('home_live_count', { count: library.live.length })}</span>
-            </div>
-            <div class="hero-stage__actions">
-              <a class="selector pill-btn pill-btn--primary" href="${buildRoute(library.hero?.primaryAction?.route || 'live')}" data-route-link>
-                ${library.hero?.primaryAction?.label || t('home_live_action')}
-              </a>
-              <a class="selector pill-btn" href="${buildRoute(library.hero?.secondaryAction?.route || 'movies')}" data-route-link>
-                ${library.hero?.secondaryAction?.label || t('home_movies_action')}
-              </a>
-            </div>
-          </div>
-        </article>
-        <aside class="hero-stage__rail">
-          <div class="hero-stage__stat">
-            <small>${t('home_active_source')}</small>
-            <strong>${library.sourceLabel}</strong>
-          </div>
-          <div class="hero-stage__stat">
-            <small>${t('home_live_profile')}</small>
-            <strong>${state.preferences.liveProfile === 'latency' ? t('home_profile_latency') : t('home_profile_stable')}</strong>
-          </div>
-          <div class="hero-stage__live">
-            <div class="hero-stage__live-head">
-              <div>
-                <small>${t('home_quick_look')}</small>
-                <h3>${t('home_live_cards')}</h3>
-              </div>
-            </div>
-            <div class="hero-stage__live-list">
-              ${liveRail.map(renderLiveMiniCard).join('')}
-            </div>
-          </div>
-        </aside>
-      </section>
+  async load() {
+    if (this.isLoading) return;
+    this.isLoading = true;
 
-      ${
-        continueWatching.length
-          ? `
-            <section class="dashboard-panel">
-              <div class="section-head">
-                <div>
-                  <span class="section-head__eyebrow">${t('home_continue')}</span>
-                  <h2>${t('home_continue_title')}</h2>
-                </div>
-              </div>
-              <div class="poster-rail">
-                ${continueWatching.map(renderContinueCard).join('')}
-              </div>
-            </section>
-          `
-          : ''
-      }
+    this.showLoading();
 
-      <section class="dashboard-panel">
-        <div class="section-head">
-          <div>
-            <span class="section-head__eyebrow">${t('home_movies_eyebrow')}</span>
-            <h2>${t('home_movies_title')}</h2>
-          </div>
-        </div>
-        <div class="poster-rail">
-          ${movieRail
-            .map((item) =>
-              renderMediaCard(item, {
-                isFavorite: state.user.favorites.movies.includes(item.id),
-                language
-              })
-            )
-            .join('')}
-        </div>
-      </section>
+    try {
+      this.data = await getHomeData();
+      this.render();
+    } catch (error) {
+      console.error('Error loading home page:', error);
+      this.showError('Failed to load content. Please try again.');
+    } finally {
+      this.isLoading = false;
+    }
+  }
 
-      <section class="dashboard-panel">
-        <div class="section-head">
-          <div>
-            <span class="section-head__eyebrow">${t('home_series_eyebrow')}</span>
-            <h2>${t('home_series_title')}</h2>
-          </div>
-        </div>
-        <div class="poster-rail">
-          ${seriesRail
-            .map((item) =>
-              renderMediaCard(item, {
-                isFavorite: state.user.favorites.series.includes(item.id),
-                language
-              })
-            )
-            .join('')}
-        </div>
-      </section>
-    </section>
-  `;
+  showLoading() {
+    this.container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Loading content...</p></div>';
+  }
+
+  showError(message) {
+    this.container.innerHTML = '<div class="error"><h2>Error</h2><p>' + message + '</p><button onclick="location.reload()">Retry</button></div>';
+  }
+
+  render() {
+    if (!this.data) return;
+
+    const { hero_items, latest_movies, trending_movies, popular_series, live_channels } = this.data;
+
+    this.container.innerHTML = '<div class="home-page">' +
+      '<div class="hero-section">' + this.renderHero(hero_items) + '</div>' +
+      '<div class="content-section">' +
+        '<div class="category-section"><h2>Live Channels</h2><div class="content-grid">' + this.renderItems(live_channels, 'live') + '</div></div>' +
+        '<div class="category-section"><h2>Latest Movies</h2><div class="content-grid">' + this.renderItems(latest_movies, 'movie') + '</div></div>' +
+        '<div class="category-section"><h2>Trending Movies</h2><div class="content-grid">' + this.renderItems(trending_movies, 'movie') + '</div></div>' +
+        '<div class="category-section"><h2>Popular Series</h2><div class="content-grid">' + this.renderItems(popular_series, 'series') + '</div></div>' +
+      '</div>' +
+    '</div>';
+
+    this.attachEventListeners();
+  }
+
+  renderHero(items) {
+    if (!items || items.length === 0) return '<div class="no-content">No hero content available</div>';
+
+    const item = items[0];
+    const image = item.poster || item.logo || '/images/placeholder.jpg';
+    const title = item.name || item.title || 'Unknown';
+
+    return '<div class="hero-item" data-id="' + item.id + '" data-mode="live">' +
+      '<img src="' + image + '" alt="' + title + '" class="hero-image">' +
+      '<div class="hero-overlay">' +
+        '<h1>' + title + '</h1>' +
+        '<button class="play-button">Play</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  renderItems(items, mode) {
+    if (!items || items.length === 0) return '<div class="no-content">No content available</div>';
+
+    return items.map(item => {
+      const image = item.poster || item.logo || '/images/placeholder.jpg';
+      const title = item.name || item.title || 'Unknown';
+
+      return '<div class="content-item" data-id="' + item.id + '" data-mode="' + mode + '">' +
+        '<img src="' + image + '" alt="' + title + '" loading="lazy">' +
+        '<h3>' + title + '</h3>' +
+      '</div>';
+    }).join('');
+  }
+
+  attachEventListeners() {
+    // Hero play button
+    const heroPlayBtn = this.container.querySelector('.play-button');
+    if (heroPlayBtn) {
+      heroPlayBtn.addEventListener('click', (e) => {
+        const heroItem = e.target.closest('.hero-item');
+        if (heroItem) {
+          const id = heroItem.dataset.id;
+          const mode = heroItem.dataset.mode;
+          this.playItem(id, mode);
+        }
+      });
+    }
+
+    // Content items
+    const contentItems = this.container.querySelectorAll('.content-item');
+    contentItems.forEach(item => {
+      item.addEventListener('click', (e) => {
+        const id = item.dataset.id;
+        const mode = item.dataset.mode;
+        this.playItem(id, mode);
+      });
+    });
+  }
+
+  playItem(id, mode) {
+    // Navigate to player page
+    window.location.hash = '#/player/' + mode + '/' + id;
+  }
 }
