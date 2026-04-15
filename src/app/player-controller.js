@@ -14,10 +14,20 @@ export class PlayerController {
     this.channelDigits = '';
     this.channelTimer = 0;
     this.savedTrackApplied = false;
+    this.isTvMode = this.detectTvMode();
     this.boundShowControls = () => this.showControls();
     this.boundScrubStart = (event) => this.handleScrubStart(event);
     this.boundScrubMove = (event) => this.handleScrubMove(event);
     this.boundScrubEnd = (event) => this.handleScrubEnd(event);
+  }
+
+  detectTvMode() {
+    // TV detection: screen width > 1280 or user agent contains TV keywords
+    const isWideScreen = window.innerWidth > 1280;
+    const isTvUserAgent = /TV|SmartTV|WebOS|Tizen|Android.*TV|AppleTV|roku|firetv/i.test(navigator.userAgent);
+    const isTouchDevice = 'ontouchstart' in window && window.innerWidth <= 1024;
+    
+    return (isWideScreen || isTvUserAgent) && !isTouchDevice;
   }
 
   async mount() {
@@ -48,7 +58,7 @@ export class PlayerController {
     this.engine = new MediaEngine(this.video, {
       live: this.options.item.kind === 'live',
       profile: this.options.profile,
-      autoplay: true
+      autoplay: !this.isTvMode // TV için autoplay devre dışı
     });
 
     this.engine.setMuted(Boolean(this.options.playerState?.muted));
@@ -120,7 +130,7 @@ export class PlayerController {
 
     await this.engine.load(this.options.item, {
       live: this.options.item.kind === 'live',
-      autoplay: true,
+      autoplay: !this.isTvMode,
       profile: this.options.profile
     });
 

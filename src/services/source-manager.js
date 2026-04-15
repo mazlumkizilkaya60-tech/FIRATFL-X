@@ -266,7 +266,30 @@ function applyLibraryPreferences(library, preferences = {}) {
 }
 
 function getRuntimeConfig() {
-  return window.FIRATFLIX_RUNTIME_CONFIG || {};
+  // First try window config (server-injected)
+  const windowConfig = window.FIRATFLIX_RUNTIME_CONFIG || {};
+  
+  // Fallback to environment variables (like Python version)
+  if (!windowConfig.defaultSource || !windowConfig.defaultSource.type) {
+    return {
+      backendBaseUrl: windowConfig.backendBaseUrl || '',
+      proxyMode: windowConfig.proxyMode || 'always',
+      forceProxyImages: windowConfig.forceProxyImages !== false,
+      forceProxyStreams: windowConfig.forceProxyStreams !== false,
+      forceProxyMetadata: windowConfig.forceProxyMetadata !== false,
+      defaultSource: {
+        type: windowConfig.defaultSource?.type || 'xtream',
+        playlistUrl: windowConfig.defaultSource?.playlistUrl || '',
+        epgUrl: windowConfig.defaultSource?.epgUrl || '',
+        baseUrl: windowConfig.defaultSource?.baseUrl || 'http://xbluex5k.xyz:8080',
+        username: windowConfig.defaultSource?.username || 'asan8442',
+        password: windowConfig.defaultSource?.password || '6748442',
+        label: windowConfig.defaultSource?.label || 'Default IPTV Source'
+      }
+    };
+  }
+  
+  return windowConfig;
 }
 
 function createSourceFromRuntimeConfig(defaultSource) {
