@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top right, rgba(82, 197, 255, 0.1), transparent 26%),
+    radial-gradient(circle at left center, rgba(18, 235, 255, 0.06), transparent 22%),
+    linear-gradient(180deg, #030912 0%, #08121d 36%, #09131f 100%);
+  color: var(--text);
+  font-family: var(--font-body);
+  overflow: hidden;
+}
+
+body {
+  position: relative;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.selector {
+  position: relative;
+  scroll-margin: 28px;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+.selector:focus-visible,
+.selector.is-focused {
+  outline: none;
+  z-index: 4;
+  border-color: var(--accent-strong) !important;
+  box-shadow: var(--shadow-focus) !important;
+}

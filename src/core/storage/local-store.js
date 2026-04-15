@@ -1,50 +1,52 @@
-export function createLocalStore(namespace = 'app') {
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('local-store');
+
+export function createLocalStore(namespace) {
   const prefix = `${namespace}:`;
 
-  return {
-    read(key, fallback = null) {
-      try {
-        const raw = localStorage.getItem(prefix + key);
-        return raw ? JSON.parse(raw) : fallback;
-      } catch (error) {
-        console.warn('localStore read hatası:', error);
-        return fallback;
-      }
-    },
-
-    write(key, value) {
-      try {
-        localStorage.setItem(prefix + key, JSON.stringify(value));
-        return true;
-      } catch (error) {
-        console.warn('localStore write hatası:', error);
-        return false;
-      }
-    },
-
-    remove(key) {
-      try {
-        localStorage.removeItem(prefix + key);
-        return true;
-      } catch (error) {
-        console.warn('localStore remove hatası:', error);
-        return false;
-      }
-    },
-
-    clear() {
-      try {
-        const keys = [];
-        for (let i = 0; i < localStorage.length; i += 1) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith(prefix)) keys.push(key);
-        }
-        keys.forEach((key) => localStorage.removeItem(key));
-        return true;
-      } catch (error) {
-        console.warn('localStore clear hatası:', error);
-        return false;
-      }
+  function read(key, fallback) {
+    try {
+      const raw = window.localStorage.getItem(prefix + key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (error) {
+      logger.warn('read failed', key, error);
+      return fallback;
     }
+  }
+
+  function write(key, value) {
+    try {
+      window.localStorage.setItem(prefix + key, JSON.stringify(value));
+      return value;
+    } catch (error) {
+      logger.warn('write failed', key, error);
+      return value;
+    }
+  }
+
+  function remove(key) {
+    try {
+      window.localStorage.removeItem(prefix + key);
+    } catch (error) {
+      logger.warn('remove failed', key, error);
+    }
+  }
+
+  function clear() {
+    try {
+      Object.keys(window.localStorage)
+        .filter((key) => key.startsWith(prefix))
+        .forEach((key) => window.localStorage.removeItem(key));
+    } catch (error) {
+      logger.warn('clear failed', error);
+    }
+  }
+
+  return {
+    read,
+    write,
+    remove,
+    clear
   };
 }

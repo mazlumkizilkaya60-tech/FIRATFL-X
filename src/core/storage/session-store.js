@@ -1,49 +1,33 @@
-export function createSessionStore(namespace = 'app') {
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('session-store');
+
+export function createSessionStore(namespace) {
   const prefix = `${namespace}:`;
 
   return {
-    read(key, fallback = null) {
+    read(key, fallback) {
       try {
-        const raw = sessionStorage.getItem(prefix + key);
+        const raw = window.sessionStorage.getItem(prefix + key);
         return raw ? JSON.parse(raw) : fallback;
       } catch (error) {
-        console.warn('sessionStore read hatası:', error);
+        logger.warn('read failed', key, error);
         return fallback;
       }
     },
-
     write(key, value) {
       try {
-        sessionStorage.setItem(prefix + key, JSON.stringify(value));
-        return true;
+        window.sessionStorage.setItem(prefix + key, JSON.stringify(value));
       } catch (error) {
-        console.warn('sessionStore write hatası:', error);
-        return false;
+        logger.warn('write failed', key, error);
       }
+      return value;
     },
-
     remove(key) {
       try {
-        sessionStorage.removeItem(prefix + key);
-        return true;
+        window.sessionStorage.removeItem(prefix + key);
       } catch (error) {
-        console.warn('sessionStore remove hatası:', error);
-        return false;
-      }
-    },
-
-    clear() {
-      try {
-        const keys = [];
-        for (let i = 0; i < sessionStorage.length; i += 1) {
-          const key = sessionStorage.key(i);
-          if (key && key.startsWith(prefix)) keys.push(key);
-        }
-        keys.forEach((key) => sessionStorage.removeItem(key));
-        return true;
-      } catch (error) {
-        console.warn('sessionStore clear hatası:', error);
-        return false;
+        logger.warn('remove failed', key, error);
       }
     }
   };
