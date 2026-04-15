@@ -1,0 +1,1 @@
+webOS hosted lab shell. Buradaki index.html remote hosted app URLsine yonlendirir.

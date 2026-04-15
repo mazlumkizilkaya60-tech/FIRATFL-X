@@ -1,0 +1,51 @@
+⬥ Injecting environment variable values for all scopes
+⬥ Setting up local dev server
+
+⬥ Starting Vite dev server
+
+> firatflix-omega-tv@1.0.0 dev
+> vite
+
+Port 4173 is in use, trying another one...
+
+  VITE v5.4.21  ready in 269 ms
+
+  ➜  Local:   http://localhost:4174/
+  ➜  Network: http://192.168.1.129:4174/
+  ➜  Network: http://172.23.64.1:4174/
+⬥ Netlify Dev could not start or connect to localhost:5173.
+⬥ Please make sure your framework server is running on port 5173
+⬥ If not, you can configure it using the targetPort option in your netlify.toml.
+​
+Internal error during "dev.command"                           
+────────────────────────────────────────────────────────────────
+​
+  Error message
+  Error: Timed out waiting for port '5173' to be open
+​
+  Error location
+  During dev.command
+      at startFrameworkServer (file:///C:/Users/kzlky/AppData/Local/npm-cache/_npx/da5c1b6ea715e8b4/node_modules/netlify-cli/dist/utils/framework-server.js:52:23)
+      at async devCommand (file:///C:/Users/kzlky/AppData/Local/npm-cache/_npx/da5c1b6ea715e8b4/node_modules/netlify-cli/dist/utils/run-build.js:63:31)
+      at async coreStep (file:///C:/Users/kzlky/AppData/Local/npm-cache/_npx/da5c1b6ea715e8b4/node_modules/netlify-cli/node_modules/@netlify/build/lib/steps/get.js:31:13)
+      at async fireCoreStep (file:///C:/Users/kzlky/AppData/Local/npm-cache/_npx/da5c1b6ea715e8b4/node_modules/netlify-cli/node_modules/@netlify/build/lib/steps/core_step.js:11:98)
+      at async tFireStep (file:///C:/Users/kzlky/AppData/Local/npm-cache/_npx/da5c1b6ea715e8b4/node_modules/netlify-cli/node_modules/@netlify/build/lib/time/main.js:19:63)
+      at async file:///C:/Users/kzlky/AppData/Local/npm-cache/_npx/da5c1b6ea715e8b4/node_modules/netlify-cli/node_modules/@netlify/build/lib/steps/run_step.js:65:329
+      at async pReduce.index (file:///C:/Users/kzlky/AppData/Local/npm-cache/_npx/da5c1b6ea715e8b4/node_modules/netlify-cli/node_modules/@netlify/build/lib/steps/run_steps.js:12:400)
+      at async runSteps (file:///C:/Users/kzlky/AppData/Local/npm-cache/_npx/da5c1b6ea715e8b4/node_modules/netlify-cli/node_modules/@netlify/build/lib/steps/run_steps.js:11:234)
+      at async runBuild (file:///C:/Users/kzlky/AppData/Local/npm-cache/_npx/da5c1b6ea715e8b4/node_modules/netlify-cli/node_modules/@netlify/build/lib/core/build.js:406:157)
+      at async initAndRunBuild (file:///C:/Users/kzlky/AppData/Local/npm-cache/_npx/da5c1b6ea715e8b4/node_modules/netlify-cli/node_modules/@netlify/build/lib/core/build.js:311:161)
+​
+  Resolved config
+  build:
+    command: npm run build
+    commandOrigin: config
+    publish: C:\Users\kzlky\Desktop\firatflix_omega_tv\dist
+    publishOrigin: config
+  functionsDirectory: C:\Users\kzlky\Desktop\firatflix_omega_tv\netlify\functions
+  redirects:
+    - force: true
+      from: /api/proxy*
+      status: 200
+      to: /.netlify/functions/proxy
+  redirectsOrigin: config

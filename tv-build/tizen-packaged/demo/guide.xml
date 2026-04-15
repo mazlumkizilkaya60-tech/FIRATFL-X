@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tv generator-info-name="FIRATFLIX Demo">
+  <channel id="live-101"><display-name>Omega News</display-name></channel>
+  <channel id="live-102"><display-name>Pulse Sports</display-name></channel>
+  <channel id="live-103"><display-name>Studio Prime</display-name></channel>
+  <programme start="20260408110000 +0300" stop="20260408120000 +0300" channel="live-101"><title>Morning Desk</title><desc>Günün yayın ve ekonomi başlıkları.</desc></programme>
+  <programme start="20260408120000 +0300" stop="20260408130000 +0300" channel="live-101"><title>Orbit Bulletin</title><desc>Küresel gelişmeler.</desc></programme>
+  <programme start="20260408110000 +0300" stop="20260408123000 +0300" channel="live-102"><title>Matchday Warmup</title><desc>Maç önü analizleri.</desc></programme>
+  <programme start="20260408123000 +0300" stop="20260408133000 +0300" channel="live-102"><title>Live Arena</title><desc>Canlı karşılaşma yayını.</desc></programme>
+  <programme start="20260408110000 +0300" stop="20260408130000 +0300" channel="live-103"><title>Premiere Cut</title><desc>Özel gösterim kuşağı.</desc></programme>
+  <programme start="20260408130000 +0300" stop="20260408143000 +0300" channel="live-103"><title>Director Session</title><desc>Yönetmen masası.</desc></programme>
+</tv>

@@ -1,0 +1,1 @@
+webOS packaged app. webOS CLI veya webOS Studio ile package/install yapin.

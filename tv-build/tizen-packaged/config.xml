@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets"
+  xmlns:tizen="http://tizen.org/ns/widgets"
+  id="http://yourdomain.example/firatflix/omega/tv"
+  version="1.0.0"
+  viewmodes="maximized">
+  <tizen:application id="LQ7M2M8A9V.firatflix.omega.tv" package="LQ7M2M8A9V" required_version="5.5"/>
+  <content src="index.html"/>
+  <icon src="brand/firatflix-mark.svg"/>
+  <name>FIRATFLIX OMEGA TV</name>
+  <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+  <feature name="http://tizen.org/feature/network.wifi"/>
+  <feature name="http://tizen.org/feature/network.ethernet"/>
+  <access origin="https://your-static-host.example.com" subdomains="true"/>
+  <tizen:allow-origin>https://your-static-host.example.com</tizen:allow-origin>
+  <access origin="https://cdn.jsdelivr.net" subdomains="true"/>
+  <tizen:allow-origin>https://cdn.jsdelivr.net</tizen:allow-origin>
+  <tizen:setting screen-orientation="landscape" context-menu="disable" encryption="disable" install-location="auto" hwkey-event="enable"/>
+</widget>

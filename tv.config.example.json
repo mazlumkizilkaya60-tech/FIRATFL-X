@@ -1,0 +1,20 @@
+{
+  "hostedAppUrl": "https://your-static-host.example.com/",
+  "backendBaseUrl": "https://your-static-host.example.com",
+  "allowedOrigins": [
+    "https://your-static-host.example.com",
+    "https://cdn.jsdelivr.net"
+  ],
+  "tizen": {
+    "appId": "LQ7M2M8A9V.firatflix.omega.tv",
+    "packageId": "LQ7M2M8A9V",
+    "requiredVersion": "5.5",
+    "name": "FIRATFLIX OMEGA TV"
+  },
+  "webos": {
+    "id": "com.firatflix.omega.tv",
+    "title": "FIRATFLIX OMEGA TV",
+    "version": "1.0.0",
+    "vendor": "FIRATFLIX"
+  }
+}

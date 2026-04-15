@@ -1,0 +1,7 @@
+#EXTM3U x-tvg-url="./guide.xml"
+#EXTINF:-1 tvg-id="live-101" tvg-name="Omega News" tvg-logo="https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=300&q=80" group-title="News",Omega News
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="live-102" tvg-name="Pulse Sports" tvg-logo="https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=300&q=80" group-title="Sports",Pulse Sports
+https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8
+#EXTINF:-1 tvg-id="live-103" tvg-name="Studio Prime" tvg-logo="https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=300&q=80" group-title="Cinema",Studio Prime
+https://test-streams.mux.dev/test_001/stream.m3u8

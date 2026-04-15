@@ -1,0 +1,1 @@
+Tizen hosted lab shell. Samsung store submission icin degil, lab ve local testing icin dusunun.

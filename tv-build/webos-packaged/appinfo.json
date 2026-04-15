@@ -1,0 +1,14 @@
+{
+  "id": "com.firatflix.omega.tv",
+  "version": "1.0.0",
+  "vendor": "FIRATFLIX",
+  "type": "web",
+  "main": "index.html",
+  "title": "FIRATFLIX OMEGA TV",
+  "icon": "brand/firatflix-mark.svg",
+  "largeIcon": "brand/firatflix-logo.svg",
+  "requiredPermissions": [
+    "network.connection",
+    "media.operation"
+  ]
+}
