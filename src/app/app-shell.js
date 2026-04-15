@@ -459,7 +459,9 @@ export class AppShell {
       try {
         await this.pageController.mount();
       } catch (error) {
-        console.warn(error);
+        console.error('Player mount failed:', error);
+        // Python versiyonu gibi basit error handling
+        this.setToast('Player başlatılamadı');
       }
     }
   }

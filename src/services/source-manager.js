@@ -8,8 +8,44 @@ import { mergeEpg, loadEpg } from './epg/epg-service.js';
 import { loadXtreamSeriesDetails, loadXtreamSource } from './xtream/xtream-service.js';
 
 const logger = createLogger('source-manager');
+
+// Basit TTLCache benzeri cache sistemi (Python versiyonu gibi)
+class SimpleTTLCache {
+  constructor(ttl = 180) {
+    this.ttl = ttl;
+    this.store = new Map();
+  }
+
+  get(key) {
+    const item = this.store.get(key);
+    if (!item) return null;
+    
+    const [expiry, value] = item;
+    if (Date.now() > expiry) {
+      this.store.delete(key);
+      return null;
+    }
+    
+    return value;
+  }
+
+  set(key, value, ttl = null) {
+    const expiry = Date.now() + ((ttl || this.ttl) * 1000);
+    this.store.set(key, [expiry, value]);
+  }
+
+  clear() {
+    this.store.clear();
+  }
+
+  size() {
+    return this.store.size;
+  }
+}
+
+const simpleCache = new SimpleTTLCache(300); // 5 dakika TTL
 const cacheDb = createKeyValueDatabase('firatflix-cache');
-const CATALOG_CACHE_VERSION = 'v4-force-proxy-http';
+const CATALOG_CACHE_VERSION = 'v4-simple-cache';
 
 const ADULT_PATTERNS = [
   /xxx/i,
@@ -266,30 +302,23 @@ function applyLibraryPreferences(library, preferences = {}) {
 }
 
 function getRuntimeConfig() {
-  // First try window config (server-injected)
-  const windowConfig = window.FIRATFLIX_RUNTIME_CONFIG || {};
-  
-  // Fallback to environment variables (like Python version)
-  if (!windowConfig.defaultSource || !windowConfig.defaultSource.type) {
-    return {
-      backendBaseUrl: windowConfig.backendBaseUrl || '',
-      proxyMode: windowConfig.proxyMode || 'always',
-      forceProxyImages: windowConfig.forceProxyImages !== false,
-      forceProxyStreams: windowConfig.forceProxyStreams !== false,
-      forceProxyMetadata: windowConfig.forceProxyMetadata !== false,
-      defaultSource: {
-        type: windowConfig.defaultSource?.type || 'xtream',
-        playlistUrl: windowConfig.defaultSource?.playlistUrl || '',
-        epgUrl: windowConfig.defaultSource?.epgUrl || '',
-        baseUrl: windowConfig.defaultSource?.baseUrl || 'http://xbluex5k.xyz:8080',
-        username: windowConfig.defaultSource?.username || 'asan8442',
-        password: windowConfig.defaultSource?.password || '6748442',
-        label: windowConfig.defaultSource?.label || 'Default IPTV Source'
-      }
-    };
-  }
-  
-  return windowConfig;
+  // Python versiyonu gibi basit config - doğrudan environment variables kullan
+  return {
+    backendBaseUrl: '',
+    proxyMode: 'always',
+    forceProxyImages: true,
+    forceProxyStreams: true,
+    forceProxyMetadata: true,
+    defaultSource: {
+      type: 'xtream',
+      playlistUrl: '',
+      epgUrl: '',
+      baseUrl: 'http://xbluex5k.xyz:8080',
+      username: 'asan8442',
+      password: '6748442',
+      label: 'FIRATFLIX IPTV'
+    }
+  };
 }
 
 function createSourceFromRuntimeConfig(defaultSource) {
@@ -364,33 +393,24 @@ export class SourceManager {
 
     validateBrowserSource(activeSource);
 
+    // Python versiyonu gibi basit cache kontrolü
+    const cacheKey = `library-${activeSource.id}`;
     let baseLibrary = null;
 
     if (!force) {
-      baseLibrary = await cacheDb.get(getCatalogCacheKey(activeSource.id));
+      baseLibrary = simpleCache.get(cacheKey);
+      if (!baseLibrary) {
+        // IndexedDB'den de kontrol et
+        baseLibrary = await cacheDb.get(getCatalogCacheKey(activeSource.id));
+      }
     }
 
     if (!baseLibrary) {
-      let library;
-
-      if (activeSource.type === 'xtream') {
-        library = await loadXtreamSource(activeSource);
-      } else if (activeSource.type === 'm3u') {
-        library = await loadM3uSource(activeSource);
-      } else {
-        throw new Error('Aktif kaynak tipi desteklenmiyor. Lütfen geçerli bir M3U veya Xtream kaynağı ekleyin.');
-      }
-
-      if (activeSource.epgUrl) {
-        try {
-          const epg = await loadEpg(activeSource.epgUrl, activeSource);
-          library.live = mergeEpg(library.live, epg);
-        } catch (error) {
-          logger.warn('epg merge failed', error);
-        }
-      }
-
-      baseLibrary = finalizeLibrary(activeSource, library);
+      // Python versiyonu gibi ilk seferde tüm veriyi çek
+      baseLibrary = await this.simpleLoadAllData(activeSource);
+      
+      // Cache'e kaydet
+      simpleCache.set(cacheKey, baseLibrary);
       await cacheDb.set(getCatalogCacheKey(activeSource.id), baseLibrary);
     }
 
@@ -398,6 +418,114 @@ export class SourceManager {
     visibleLibrary.diagnostics = this.runDiagnostics(visibleLibrary);
 
     return visibleLibrary;
+  }
+
+  // Python versiyonu gibi basit veri yükleme
+  async simpleLoadAllData(source) {
+    if (source.type === 'xtream') {
+      return await this.simpleLoadXtreamData(source);
+    } else if (source.type === 'm3u') {
+      return await loadM3uSource(source);
+    } else {
+      throw new Error('Desteklenmeyen kaynak tipi');
+    }
+  }
+
+  async simpleLoadXtreamData(source) {
+    const cacheKey = `xtream-${source.baseUrl}`;
+    
+    // Önce cache kontrolü
+    let data = simpleCache.get(cacheKey);
+    if (data) return data;
+
+    try {
+      // Tüm kategorileri paralel çek (Python versiyonu gibi)
+      const [vodCats, seriesCats, liveCats] = await Promise.allSettled([
+        this.fetchApiData(source, 'get_vod_categories'),
+        this.fetchApiData(source, 'get_series_categories'), 
+        this.fetchApiData(source, 'get_live_categories')
+      ]);
+
+      const categories = {
+        movies: vodCats.status === 'fulfilled' ? vodCats.value : [],
+        series: seriesCats.status === 'fulfilled' ? seriesCats.value : [],
+        live: liveCats.status === 'fulfilled' ? liveCats.value : []
+      };
+
+      // Tüm içerikleri çek (Python versiyonu gibi)
+      const [vodStreams, seriesStreams, liveStreams] = await Promise.allSettled([
+        this.fetchApiData(source, 'get_vod_streams'),
+        this.fetchApiData(source, 'get_series'),
+        this.fetchApiData(source, 'get_live_streams')
+      ]);
+
+      const streams = {
+        movies: vodStreams.status === 'fulfilled' ? vodStreams.value : [],
+        series: seriesStreams.status === 'fulfilled' ? seriesStreams.value : [],
+        live: liveStreams.status === 'fulfilled' ? liveStreams.value : []
+      };
+
+      data = {
+        movies: streams.movies,
+        series: streams.series,
+        live: streams.live,
+        categories: categories,
+        sourceType: 'xtream',
+        sourceLabel: source.label || 'Xtream Source'
+      };
+
+      // Cache'e kaydet
+      simpleCache.set(cacheKey, data);
+      return data;
+
+    } catch (error) {
+      logger.error('Xtream data loading failed:', error);
+      throw error;
+    }
+  }
+
+  // Basit API çağrısı (Python versiyonu gibi)
+  async fetchApiData(source, action, params = {}) {
+    const cacheKey = `api-${action}-${JSON.stringify(params)}`;
+    
+    // Kısa süreli cache kontrolü
+    let cached = simpleCache.get(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const url = this.buildApiUrl(source, action, params);
+      const response = await fetch(url, {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      simpleCache.set(cacheKey, data, 60); // 1 dakika cache
+      return data;
+
+    } catch (error) {
+      logger.warn(`API call failed for ${action}:`, error);
+      return [];
+    }
+  }
+
+  buildApiUrl(source, action, params = {}) {
+    const url = new URL('/player_api.php', source.baseUrl);
+    url.searchParams.set('username', source.username);
+    url.searchParams.set('password', source.password);
+    url.searchParams.set('action', action);
+
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) url.searchParams.set(key, value);
+    });
+
+    return url.toString();
   }
 
   addXtreamSource(meta, payload) {

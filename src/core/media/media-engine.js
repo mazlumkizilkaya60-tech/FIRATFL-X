@@ -117,7 +117,95 @@ export class MediaEngine extends EventTarget {
       throw error;
     }
 
-    await this.attachCandidate(0, options.startTime ?? 0);
+    // Python versiyonu gibi basit başlatma
+    await this.simpleLoadCandidate(0, options.startTime ?? 0);
+  }
+
+  async simpleLoadCandidate(index, startTime = 0) {
+    const candidate = this.candidates[index];
+
+    if (!candidate) {
+      const error = new Error('Alternatif kaynak kalmadı.');
+      this.emit('fatal', { error });
+      throw error;
+    }
+
+    this.currentIndex = index;
+    await this.reset();
+
+    this.emit('candidatechange', {
+      candidate,
+      index,
+      total: this.candidates.length,
+    });
+
+    this.emit('status', {
+      state: 'loading',
+      message: `${candidate.label} yükleniyor`,
+    });
+
+    // Python versiyonu gibi basit HLS başlatma
+    try {
+      await this.simpleAttachHls(candidate.url, startTime);
+    } catch (error) {
+      // Basit yöntem başarısız olursa fallback dene
+      await this.attachHls(candidate.url, startTime, candidate.credentials);
+    }
+  }
+
+  async simpleAttachHls(url, startTime = 0) {
+    // Python versiyonundaki gibi basit HLS başlatma
+    if (this.hls) {
+      this.hls.destroy();
+      this.hls = null;
+    }
+
+    const Hls = await loadHls();
+    if (!Hls) {
+      throw new Error('HLS library not available');
+    }
+
+    this.hls = new Hls({
+      enableWorker: false,
+      lowLatencyMode: false,
+      backBufferLength: 90,
+      maxBufferLength: 30,
+      maxMaxBufferLength: 600,
+      levelLoadingMaxRetry: 3,
+      levelLoadingMaxRetryTimeout: 3000,
+      fragLoadingMaxRetry: 3,
+      fragLoadingMaxRetryTimeout: 3000,
+    });
+
+    return new Promise((resolve, reject) => {
+      this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        this.emit('status', {
+          state: 'ready',
+          message: 'Hazır',
+        });
+
+        if (this.options.autoplay) {
+          this.video.play().catch(() => {
+            // Autoplay failed
+          });
+        }
+
+        resolve();
+      });
+
+      this.hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          reject(new Error(data.error?.message || 'HLS Error'));
+        }
+      });
+
+      this.hls.loadSource(url);
+      this.hls.attachMedia(this.video);
+
+      if (startTime > 0) {
+        this.video.currentTime = startTime;
+      }
+    });
   }
 
   async resolveCandidate(candidate) {
