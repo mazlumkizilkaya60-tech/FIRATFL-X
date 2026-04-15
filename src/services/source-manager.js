@@ -10,7 +10,8 @@ import { loadXtreamSeriesDetails, loadXtreamSource } from './xtream/xtream-servi
 
 const logger = createLogger('source-manager');
 const cacheDb = createKeyValueDatabase('firatflix-cache');
-const CATALOG_CACHE_VERSION = 'v3-parental-filter';
+const CATALOG_CACHE_VERSION = 'v4-force-proxy-http';
+
 const ADULT_PATTERNS = [
   /\bxxx\b/i,
   /\badult\b/i,
@@ -21,7 +22,7 @@ const ADULT_PATTERNS = [
   /\byetiskin\b/i,
   /\bplayboy\b/i,
   /\bbrazzers\b/i,
-  /\bhustler\b/i
+  /\bhustler\b/i,
 ];
 
 function resolveSourceUrl(source) {
@@ -47,12 +48,15 @@ function isAdultEntry(item = {}) {
     item.category,
     item.group,
     item.description,
-    ...(Array.isArray(item.genres) ? item.genres : [])
+    ...(Array.isArray(item.genres) ? item.genres : []),
   ].some((value) => matchesAdultPattern(value));
 }
 
 function filterCategories(categories = [], items = []) {
-  const activeIds = new Set(items.map((item) => String(item.categoryId || item.category || 'uncategorized')));
+  const activeIds = new Set(
+    items.map((item) => String(item.categoryId || item.category || 'uncategorized')),
+  );
+
   return categories.filter((category) => activeIds.has(String(category.id)));
 }
 
@@ -60,9 +64,100 @@ function validateBrowserSource(source) {
   const candidate = resolveSourceUrl(source);
   if (!candidate) return;
 
-  if (isMixedContentRisk(candidate) && !shouldUseProxy(source)) {
-    throw new Error('Site HTTPS uzerinde calisiyor ama IPTV kaynagi HTTP kullaniyor. Tarayici bunu mixed content olarak engelliyor.');
+  if (isMixedContentRisk(candidate) && !shouldUseProxy(source, candidate)) {
+    throw new Error(
+      'Site HTTPS üzerinde çalışıyor ama IPTV kaynağı HTTP kullanıyor. Proxy kapalı olduğu için tarayıcı bunu mixed content olarak engelliyor.',
+    );
   }
+}
+
+function proxyCandidate(candidate, source) {
+  if (!candidate) return candidate;
+
+  return {
+    ...candidate,
+    url: maybeProxyUrl(candidate.url, {
+      ...source,
+      credentials: candidate.credentials || source.credentials || null,
+      username:
+        source.username ||
+        candidate.username ||
+        candidate.credentials?.username ||
+        source.credentials?.username ||
+        '',
+      password:
+        source.password ||
+        candidate.password ||
+        candidate.credentials?.password ||
+        source.credentials?.password ||
+        '',
+    }),
+  };
+}
+
+function proxyItemMedia(item, source) {
+  if (!item || typeof item !== 'object') return item;
+
+  const next = { ...item };
+
+  for (const field of [
+    'poster',
+    'logo',
+    'backdrop',
+    'fanart',
+    'thumbnail',
+    'cover',
+    'streamUrl',
+    'previewUrl',
+  ]) {
+    if (next[field]) {
+      next[field] = maybeProxyUrl(next[field], source);
+    }
+  }
+
+  if (Array.isArray(next.sourceCandidates)) {
+    next.sourceCandidates = next.sourceCandidates.map((candidate) =>
+      proxyCandidate(candidate, source),
+    );
+  }
+
+  if (Array.isArray(next.seasons)) {
+    next.seasons = next.seasons.map((season) => ({
+      ...season,
+      episodes: Array.isArray(season.episodes)
+        ? season.episodes.map((episode) =>
+            proxyItemMedia(
+              {
+                ...episode,
+                poster: episode.poster || next.poster,
+                backdrop: episode.backdrop || next.backdrop,
+                category: episode.category || next.category,
+              },
+              source,
+            ),
+          )
+        : [],
+    }));
+  }
+
+  return next;
+}
+
+function proxyCollection(items = [], source) {
+  return items.map((item) => proxyItemMedia(item, source));
+}
+
+function normalizeLibraryMedia(source, library) {
+  return {
+    ...library,
+    hero: Array.isArray(library.hero)
+      ? proxyCollection(library.hero, source)
+      : proxyItemMedia(library.hero, source),
+    featured: proxyCollection(library.featured ?? [], source),
+    movies: proxyCollection(library.movies ?? [], source),
+    series: proxyCollection(library.series ?? [], source),
+    live: proxyCollection(library.live ?? [], source),
+  };
 }
 
 function createSearchIndex(library) {
@@ -72,17 +167,22 @@ function createSearchIndex(library) {
     title: item.title,
     poster: item.poster || item.logo || '',
     category: item.category || item.group || '',
-    searchKey: normalizeSearchTerm([item.title, item.category, item.group, item.description].join(' '))
+    searchKey: normalizeSearchTerm(
+      [item.title, item.category, item.group, item.description].join(' '),
+    ),
   }));
 }
 
 function createLookup(library) {
   const lookup = {};
+
   library.movies.forEach((item) => {
     lookup[item.id] = item;
   });
+
   library.series.forEach((item) => {
     lookup[item.id] = item;
+
     item.seasons?.forEach((season) => {
       season.episodes?.forEach((episode) => {
         lookup[episode.id] = {
@@ -90,46 +190,52 @@ function createLookup(library) {
           kind: 'episode',
           seriesId: item.id,
           seriesTitle: item.title,
-          poster: item.poster,
-          backdrop: item.backdrop,
-          category: item.category
+          poster: episode.poster || item.poster,
+          backdrop: episode.backdrop || item.backdrop,
+          category: episode.category || item.category,
         };
       });
     });
   });
+
   library.live.forEach((item) => {
     lookup[item.id] = item;
   });
+
   return lookup;
 }
 
 function finalizeLibrary(source, library) {
+  const normalized = normalizeLibraryMedia(source, library);
+
   const merged = {
     loadedAt: new Date().toISOString(),
-    sourceType: library.sourceType || source.type,
-    sourceLabel: library.sourceLabel || source.label,
-    hero: library.hero,
-    featured: library.featured ?? [],
-    categories: library.categories,
-    movies: library.movies ?? [],
-    series: library.series ?? [],
-    live: library.live ?? [],
-    diagnostics: null
+    sourceType: normalized.sourceType || source.type,
+    sourceLabel: normalized.sourceLabel || source.label,
+    hero: normalized.hero,
+    featured: normalized.featured ?? [],
+    categories: normalized.categories,
+    movies: normalized.movies ?? [],
+    series: normalized.series ?? [],
+    live: normalized.live ?? [],
+    diagnostics: null,
   };
 
   merged.lookup = createLookup(merged);
   merged.searchIndex = createSearchIndex(merged);
+
   return merged;
 }
 
 function replaceSeriesInLibrary(library, nextSeriesItem) {
   const nextLibrary = {
     ...library,
-    series: library.series.map((item) => (item.id === nextSeriesItem.id ? nextSeriesItem : item))
+    series: library.series.map((item) => (item.id === nextSeriesItem.id ? nextSeriesItem : item)),
   };
 
   nextLibrary.lookup = createLookup(nextLibrary);
   nextLibrary.searchIndex = createSearchIndex(nextLibrary);
+
   return nextLibrary;
 }
 
@@ -150,11 +256,13 @@ function applyLibraryPreferences(library, preferences = {}) {
   visible.categories = {
     movies: filterCategories(visible.categories?.movies, visible.movies),
     series: filterCategories(visible.categories?.series, visible.series),
-    live: filterCategories(visible.categories?.live, visible.live)
+    live: filterCategories(visible.categories?.live, visible.live),
   };
+
   visible.lookup = createLookup(visible);
   visible.searchIndex = createSearchIndex(visible);
   visible.diagnostics = null;
+
   return visible;
 }
 
@@ -165,7 +273,7 @@ function createDefaultSource() {
     label: 'FIRATFLIX Demo',
     proxyMode: 'off',
     createdAt: new Date().toISOString(),
-    epgUrl: './demo/guide.xml'
+    epgUrl: './demo/guide.xml',
   };
 }
 
@@ -176,15 +284,18 @@ export class SourceManager {
 
   bootstrap() {
     const saved = this.localStore.read('sources', null);
+
     if (saved?.list?.length) {
       return saved;
     }
+
     const seed = {
       list: [createDefaultSource()],
       activeSourceId: 'source-demo',
       diagnostics: null,
-      cacheStamp: null
+      cacheStamp: null,
     };
+
     this.localStore.write('sources', seed);
     return seed;
   }
@@ -206,25 +317,28 @@ export class SourceManager {
     return this.persist({
       ...meta,
       list,
-      activeSourceId: demoSource.id
+      activeSourceId: demoSource.id,
     });
   }
 
   async loadLibrary(meta, { force = false, preferences = {} } = {}) {
     const activeSource = this.getActiveSource(meta);
+
     if (!activeSource) {
-      throw new Error('Aktif kaynak bulunamadi.');
+      throw new Error('Aktif kaynak bulunamadı.');
     }
 
     validateBrowserSource(activeSource);
 
     let baseLibrary = null;
+
     if (!force) {
       baseLibrary = await cacheDb.get(getCatalogCacheKey(activeSource.id));
     }
 
     if (!baseLibrary) {
       let library;
+
       if (activeSource.type === 'demo') {
         library = await loadDemoLibrary();
       } else if (activeSource.type === 'xtream') {
@@ -248,6 +362,7 @@ export class SourceManager {
 
     const visibleLibrary = applyLibraryPreferences(baseLibrary, preferences);
     visibleLibrary.diagnostics = this.runDiagnostics(visibleLibrary);
+
     return visibleLibrary;
   }
 
@@ -260,26 +375,27 @@ export class SourceManager {
       username: payload.username,
       password: payload.password,
       epgUrl: payload.epgUrl || '',
-      proxyMode: 'auto',
-      createdAt: new Date().toISOString()
+      proxyMode: 'always',
+      createdAt: new Date().toISOString(),
     };
 
     return this.persist({
       ...meta,
       list: [source, ...meta.list.filter((item) => item.id !== source.id)],
-      activeSourceId: source.id
+      activeSourceId: source.id,
     });
   }
 
   addM3USource(meta, payload) {
     const credentials = tryParseXtreamCredentials(payload.playlistUrl);
+
     if (credentials) {
       return this.addXtreamSource(meta, {
         baseUrl: credentials.baseUrl,
         username: credentials.username,
         password: credentials.password,
         epgUrl: payload.epgUrl || credentials.epgUrl || '',
-        label: payload.label || `${credentials.baseUrl} • Auto Xtream`
+        label: payload.label || `${credentials.baseUrl} • Auto Xtream`,
       });
     }
 
@@ -289,21 +405,21 @@ export class SourceManager {
       label: payload.label || 'Custom M3U',
       playlistUrl: payload.playlistUrl,
       epgUrl: payload.epgUrl || '',
-      proxyMode: 'auto',
-      createdAt: new Date().toISOString()
+      proxyMode: 'always',
+      createdAt: new Date().toISOString(),
     };
 
     return this.persist({
       ...meta,
       list: [source, ...meta.list.filter((item) => item.id !== source.id)],
-      activeSourceId: source.id
+      activeSourceId: source.id,
     });
   }
 
   setActiveSource(meta, sourceId) {
     return this.persist({
       ...meta,
-      activeSourceId: sourceId
+      activeSourceId: sourceId,
     });
   }
 
@@ -311,48 +427,56 @@ export class SourceManager {
     return this.persist({
       ...meta,
       list: meta.list.map((item) =>
-        item.id === meta.activeSourceId
-          ? {
-              ...item,
-              epgUrl
-            }
-          : item
-      )
+        item.id === meta.activeSourceId ? { ...item, epgUrl } : item,
+      ),
     });
   }
 
   async clearCache(meta) {
     await cacheDb.clear();
+
     return this.persist({
       ...meta,
-      cacheStamp: new Date().toISOString()
+      cacheStamp: new Date().toISOString(),
     });
   }
 
   async hydrateSeries(meta, library, seriesId, preferences = {}) {
     const activeSource = this.getActiveSource(meta);
+
     if (!activeSource || activeSource.type !== 'xtream') {
       return library;
     }
 
-    const cachedBaseLibrary = (await cacheDb.get(getCatalogCacheKey(activeSource.id))) || library;
+    const cachedBaseLibrary =
+      (await cacheDb.get(getCatalogCacheKey(activeSource.id))) || library;
+
     const target = cachedBaseLibrary.lookup?.[seriesId] || library.lookup?.[seriesId];
+
     if (!target || target.kind !== 'series' || target.detailsLoaded) {
       return library;
     }
 
-    const enriched = await loadXtreamSeriesDetails(activeSource, target);
+    const enriched = proxyItemMedia(
+      await loadXtreamSeriesDetails(activeSource, target),
+      activeSource,
+    );
+
     const nextBaseLibrary = replaceSeriesInLibrary(cachedBaseLibrary, enriched);
+
     await cacheDb.set(getCatalogCacheKey(activeSource.id), nextBaseLibrary);
 
     const visibleLibrary = applyLibraryPreferences(nextBaseLibrary, preferences);
     visibleLibrary.diagnostics = this.runDiagnostics(visibleLibrary);
+
     return visibleLibrary;
   }
 
   search(library, query) {
     const normalized = normalizeSearchTerm(query);
+
     if (!normalized || normalized.length < 2) return [];
+
     return library.searchIndex.filter((item) => item.searchKey.includes(normalized)).slice(0, 24);
   }
 
@@ -361,26 +485,28 @@ export class SourceManager {
       if (source.type === 'demo') {
         return {
           status: 'ok',
-          message: 'Bundled demo source hazir.'
+          message: 'Bundled demo source hazır.',
         };
       }
 
       validateBrowserSource(source);
 
       await fetch(maybeProxyUrl(resolveSourceUrl(source), source), {
-        method: 'HEAD'
+        method: 'HEAD',
       });
 
       return {
         status: 'ok',
-        message: shouldUseProxy(source)
-          ? 'Kaynak backend proxy uzerinden erisilebilir.'
-          : 'Kaynak tarayici tarafindan erisilebilir.'
+        message: shouldUseProxy(source, resolveSourceUrl(source))
+          ? 'Kaynak backend proxy üzerinden erişilebilir.'
+          : 'Kaynak tarayıcı tarafından erişilebilir.',
       };
     } catch (error) {
       return {
         status: 'warn',
-        message: error?.message || 'Kaynak cevap veriyor olabilir, ancak tarayici CORS veya codec sinirlari nedeniyle dogrulayamiyor.'
+        message:
+          error?.message ||
+          'Kaynak cevap veriyor olabilir, ancak tarayıcı CORS veya codec sınırları nedeniyle doğrulayamıyor.',
       };
     }
   }
@@ -398,7 +524,7 @@ export class SourceManager {
       missingArtwork,
       liveWithEpg,
       liveWithoutEpg: library.live.length - liveWithEpg,
-      sourceType: library.sourceType
+      sourceType: library.sourceType,
     };
   }
 }
