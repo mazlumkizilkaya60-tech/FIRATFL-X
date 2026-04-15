@@ -2,15 +2,23 @@ function getRuntimeConfig() {
   return window.FIRATFLIX_RUNTIME_CONFIG || {};
 }
 
+function trimTrailingSlash(value = '') {
+  return String(value || '').replace(/\/$/, '');
+}
+
+function isHttpLikeUrl(targetUrl = '') {
+  return /^https?:\/\//i.test(String(targetUrl || '').trim());
+}
+
 export function getProxyMode(source = {}) {
-  return getRuntimeConfig().proxyMode || source.proxyMode || 'auto';
+  const runtimeConfig = getRuntimeConfig();
+  return runtimeConfig.proxyMode || source.proxyMode || 'auto';
 }
 
 export function getBackendBaseUrl() {
-  const configured = getRuntimeConfig().backendBaseUrl;
-  if (configured) {
-    return configured.replace(/\/$/, '');
-  }
+  const runtimeConfig = getRuntimeConfig();
+  const configured = trimTrailingSlash(runtimeConfig.backendBaseUrl || '');
+  if (configured) return configured;
   return window.location.origin;
 }
 
@@ -27,36 +35,88 @@ export function isLocalRuntime() {
   );
 }
 
-export function shouldUseProxy(source = {}) {
-  if (source.type === 'demo') return false;
+export function isAlreadyProxyUrl(targetUrl = '') {
+  const value = String(targetUrl || '').trim();
+  if (!value) return false;
 
-  const mode = getProxyMode(source);
-  if (mode === 'off') return false;
-  if (mode === 'always') return true;
-  if (isLocalRuntime()) return false;
-  return Boolean(getBackendBaseUrl());
-}
-
-export function buildProxyUrl(targetUrl, source = {}) {
-  const url = new URL('/api/proxy', getBackendBaseUrl());
-  url.searchParams.set('url', targetUrl);
-  if (source.username && source.password) {
-    url.searchParams.set('username', source.username);
-    url.searchParams.set('password', source.password);
+  try {
+    const parsed = new URL(value, window.location.href);
+    const proxyUrl = new URL('/api/proxy', getBackendBaseUrl());
+    return parsed.origin === proxyUrl.origin && parsed.pathname === proxyUrl.pathname;
+  } catch {
+    return value.includes('/api/proxy?url=');
   }
-  return url.toString();
-}
-
-export function maybeProxyUrl(targetUrl, source = {}) {
-  if (!targetUrl) return targetUrl;
-  return shouldUseProxy(source) ? buildProxyUrl(targetUrl, source) : targetUrl;
 }
 
 export function isMixedContentRisk(targetUrl) {
+  if (!targetUrl) return false;
+
   try {
     const parsed = new URL(targetUrl, window.location.href);
     return window.location.protocol === 'https:' && parsed.protocol === 'http:';
   } catch {
     return false;
   }
+}
+
+function shouldForceProxyByType(targetUrl = '') {
+  const runtimeConfig = getRuntimeConfig();
+  const value = String(targetUrl || '').toLowerCase();
+
+  if (
+    runtimeConfig.forceProxyImages &&
+    /\.(png|jpe?g|webp|gif|svg|bmp|ico)(\?|$)/i.test(value)
+  ) {
+    return true;
+  }
+
+  if (
+    runtimeConfig.forceProxyStreams &&
+    /\.(m3u8|m3u|ts|mp4|mkv|mov|avi)(\?|$)/i.test(value)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function shouldUseProxy(source = {}, targetUrl = '') {
+  if (source.type === 'demo') return false;
+  if (!targetUrl) return false;
+  if (!isHttpLikeUrl(targetUrl)) return false;
+  if (isAlreadyProxyUrl(targetUrl)) return false;
+
+  const mode = getProxyMode(source);
+
+  if (mode === 'off') return false;
+  if (mode === 'always') return true;
+
+  if (isMixedContentRisk(targetUrl)) return true;
+  if (shouldForceProxyByType(targetUrl)) return true;
+  if (isLocalRuntime()) return false;
+
+  return Boolean(getBackendBaseUrl());
+}
+
+export function buildProxyUrl(targetUrl, source = {}) {
+  if (!targetUrl) return targetUrl;
+  if (isAlreadyProxyUrl(targetUrl)) return targetUrl;
+  if (!isHttpLikeUrl(targetUrl)) return targetUrl;
+
+  const proxyUrl = new URL('/api/proxy', getBackendBaseUrl());
+  proxyUrl.searchParams.set('url', targetUrl);
+
+  const username = source.username || source.credentials?.username || '';
+  const password = source.password || source.credentials?.password || '';
+
+  if (username) proxyUrl.searchParams.set('username', username);
+  if (password) proxyUrl.searchParams.set('password', password);
+
+  return proxyUrl.toString();
+}
+
+export function maybeProxyUrl(targetUrl, source = {}) {
+  if (!targetUrl) return targetUrl;
+  if (!isHttpLikeUrl(targetUrl)) return targetUrl;
+  return shouldUseProxy(source, targetUrl) ? buildProxyUrl(targetUrl, source) : targetUrl;
 }
