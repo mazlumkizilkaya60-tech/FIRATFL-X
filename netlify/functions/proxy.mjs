@@ -18,7 +18,7 @@ function detectPlaylistKind(targetUrl, contentType = '') {
   return null;
 }
 
-function rewritePlaylistBody(body, targetUrl, requestUrl) {
+function rewritePlaylistBody(body, targetUrl, requestUrl, authParams = {}) {
   const baseTarget = new URL(targetUrl);
   const baseProxy = new URL(requestUrl, 'http://localhost');
 
@@ -28,19 +28,20 @@ function rewritePlaylistBody(body, targetUrl, requestUrl) {
       const trimmed = line.trim();
       if (!trimmed) return line;
 
+      const transform = (value) => {
+        const resolved = new URL(value, baseTarget).toString();
+        const next = new URL(baseProxy);
+        next.searchParams.set('url', resolved);
+        if (authParams.username) next.searchParams.set('username', authParams.username);
+        if (authParams.password) next.searchParams.set('password', authParams.password);
+        return next.toString();
+      };
+
       if (trimmed.startsWith('#')) {
-        return line.replace(/URI="([^"]+)"/g, (_match, value) => {
-          const resolved = new URL(value, baseTarget).toString();
-          const next = new URL(baseProxy);
-          next.searchParams.set('url', resolved);
-          return `URI="${next.toString()}"`;
-        });
+        return line.replace(/URI="([^"]+)"/g, (_match, value) => `URI="${transform(value)}"`);
       }
 
-      const resolved = new URL(trimmed, baseTarget).toString();
-      const next = new URL(baseProxy);
-      next.searchParams.set('url', resolved);
-      return next.toString();
+      return transform(trimmed);
     })
     .join('\n');
 }
@@ -48,11 +49,17 @@ function rewritePlaylistBody(body, targetUrl, requestUrl) {
 function createForwardHeaders(event) {
   const headers = new Headers();
   const eventHeaders = event.headers || {};
-  for (const name of ['accept', 'accept-language', 'content-type', 'range', 'user-agent', 'referer', 'authorization', 'cookie', 'x-xtream-user', 'x-xtream-pass']) {
+  for (const name of ['accept', 'accept-language', 'content-type', 'range', 'user-agent', 'referer', 'authorization', 'cookie']) {
     const value = eventHeaders[name];
     if (value) headers.set(name, value);
   }
   return headers;
+}
+
+function shouldForwardXtreamHeaders(parsedTarget, username, password) {
+  if (!username || !password) return false;
+  const value = `${parsedTarget.pathname}${parsedTarget.search}`.toLowerCase();
+  return /player_api\.php|\/stream\/|\/get\.php|\.m3u8|\.m3u|\.ts|\.mp4|\.mkv/.test(value);
 }
 
 function createResponseHeaders(upstreamHeaders) {
@@ -117,16 +124,18 @@ export const handler = async (event) => {
       });
     }
 
-    // Add credentials to URL path for Xtream
+    // Add credentials to URL path for Xtream stream URLs
     if (username && password && parsedTarget.pathname.includes('/stream/')) {
       parsedTarget.pathname = parsedTarget.pathname.replace('/stream/', `/${username}/${password}/`);
     }
 
     const forwardHeaders = createForwardHeaders(event);
-    if (username) forwardHeaders.set('x-xtream-user', username);
-    if (password) forwardHeaders.set('x-xtream-pass', password);
-    
-    // Add required headers for Xtream API and other endpoints
+    if (shouldForwardXtreamHeaders(parsedTarget, username, password)) {
+      forwardHeaders.set('x-xtream-user', username);
+      forwardHeaders.set('x-xtream-pass', password);
+    }
+
+    // Add required headers for upstream requests
     if (!forwardHeaders.has('user-agent')) {
       forwardHeaders.set('user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
     }
@@ -153,6 +162,19 @@ export const handler = async (event) => {
 
       // For HEAD requests, return just headers
       if (event.httpMethod === 'HEAD') {
+        if (!upstreamResponse.ok && [405, 501].includes(upstreamResponse.status)) {
+          const fallbackResponse = await fetch(parsedTarget.toString(), {
+            method: 'GET',
+            headers: forwardHeaders,
+            redirect: 'follow',
+            signal: controller.signal
+          });
+          return new Response(null, {
+            status: fallbackResponse.status,
+            headers: createResponseHeaders(fallbackResponse.headers)
+          });
+        }
+
         return new Response(null, {
           status: upstreamResponse.status,
           headers: createResponseHeaders(upstreamResponse.headers)
@@ -165,7 +187,10 @@ export const handler = async (event) => {
       const playlistKind = detectPlaylistKind(parsedTarget.toString(), contentType);
       if (playlistKind === 'hls') {
         const textBody = await upstreamResponse.text();
-        const rewritten = rewritePlaylistBody(textBody, parsedTarget.toString(), event.path || '/api/proxy');
+        const rewritten = rewritePlaylistBody(textBody, parsedTarget.toString(), event.path || '/api/proxy', {
+          username,
+          password
+        });
         return new Response(rewritten, {
           status: 200,
           headers: createResponseHeaders(upstreamResponse.headers)

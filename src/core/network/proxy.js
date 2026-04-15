@@ -80,6 +80,16 @@ function shouldForceProxyByType(targetUrl = '') {
   return false;
 }
 
+function requiresCredentials(targetUrl = '') {
+  const value = String(targetUrl || '').toLowerCase();
+  return (
+    /player_api\.php/i.test(value) ||
+    /\/stream\//i.test(value) ||
+    /get\.php/i.test(value) ||
+    /\.(m3u8|m3u|ts|mp4|mkv)(\?|$)/i.test(value)
+  );
+}
+
 export function shouldUseProxy(source = {}, targetUrl = '') {
   if (source.type === 'demo') return false;
   if (!targetUrl) return false;
@@ -109,8 +119,10 @@ export function buildProxyUrl(targetUrl, source = {}) {
   const username = source.username || source.credentials?.username || '';
   const password = source.password || source.credentials?.password || '';
 
-  if (username) proxyUrl.searchParams.set('username', username);
-  if (password) proxyUrl.searchParams.set('password', password);
+  if (username && password && requiresCredentials(targetUrl)) {
+    proxyUrl.searchParams.set('username', username);
+    proxyUrl.searchParams.set('password', password);
+  }
 
   return proxyUrl.toString();
 }

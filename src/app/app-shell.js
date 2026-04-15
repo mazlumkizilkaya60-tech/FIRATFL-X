@@ -321,8 +321,8 @@ export class AppShell {
 
     if (state.app.error) {
       return language === 'en'
-        ? `<section class="empty-state"><span>Error</span><h3>Source could not be loaded</h3><p>${state.app.error}</p></section>`
-        : `<section class="empty-state"><span>Hata</span><h3>Kaynak yüklenemedi</h3><p>${state.app.error}</p></section>`;
+        ? `<section class="empty-state"><span>Error</span><h3>Source could not be loaded</h3><p>${state.app.error}</p><button class="selector pill-btn" data-action="retry-library">Retry</button></section>`
+        : `<section class="empty-state"><span>Hata</span><h3>Kaynak yüklenemedi</h3><p>${state.app.error}</p><button class="selector pill-btn" data-action="retry-library">Yeniden dene</button></section>`;
     }
 
     switch (route.name) {
@@ -788,6 +788,11 @@ export class AppShell {
       return;
     }
 
+    if (action === 'retry-library') {
+      await this.reloadLibrary(true);
+      return;
+    }
+
     if (action === 'run-health-check') {
       const result = await this.sourceManager.testSource(this.sourceManager.getActiveSource(state.sources));
       this.store.update((draft) => {
@@ -908,35 +913,6 @@ export class AppShell {
 
       const currentSources = this.store.getState().sources;
       const activeSource = this.sourceManager.getActiveSource(currentSources);
-
-      if (activeSource?.type !== 'demo') {
-        try {
-          const fallbackSources = this.sourceManager.ensureDemoSource(currentSources);
-          const fallbackLibrary = await this.sourceManager.loadLibrary(fallbackSources, { force: false });
-
-          this.store.update((draft) => {
-            draft.sources = fallbackSources;
-            draft.library = {
-              ...draft.library,
-              ...fallbackLibrary,
-              status: 'ready'
-            };
-            draft.app.loading = false;
-            draft.app.ready = true;
-            draft.app.error = null;
-            draft.app.selectedLiveId = fallbackLibrary.live[0]?.id || null;
-          });
-          this.setToast(`${message} Demo kaynak devreye alındı.`);
-          return;
-        } catch (fallbackError) {
-          this.store.update((draft) => {
-            draft.app.loading = false;
-            draft.app.error = humanizeError(fallbackError);
-            draft.app.error = humanizeError(fallbackError, this.store.getState().preferences.language);
-          });
-          return;
-        }
-      }
 
       this.store.update((draft) => {
         draft.app.loading = false;

@@ -120,7 +120,7 @@ function renderUtilityPanel(panel, state, sourceMeta, diagnostics, lastTest, lan
     <div class="drawer__panel">
       <div class="drawer__note">
         <strong>${escapeHtml(sourceMeta?.label || t('drawer_source_unselected'))}</strong><br>
-        ${escapeHtml(sourceMeta?.type?.toUpperCase() || 'DEMO')} • ${escapeHtml(sourceMeta?.epgUrl || t('drawer_no_epg'))}
+        ${escapeHtml(sourceMeta?.type?.toUpperCase() || 'UNKNOWN')} • ${escapeHtml(sourceMeta?.epgUrl || t('drawer_no_epg'))}
       </div>
       <div class="drawer__stack drawer__stack--tight">
         ${(sourceMeta?.list || [])

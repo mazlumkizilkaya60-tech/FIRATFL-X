@@ -2,7 +2,6 @@ import { createKeyValueDatabase } from '../core/storage/indexed-db.js';
 import { maybeProxyUrl, shouldUseProxy, isMixedContentRisk } from '../core/network/proxy.js';
 import { createLogger } from '../core/utils/logger.js';
 import { normalizeSearchTerm } from '../core/utils/format.js';
-import { loadDemoLibrary } from './demo/demo-service.js';
 import { loadM3uSource } from './m3u/m3u-service.js';
 import { tryParseXtreamCredentials } from './m3u/m3u-parser.js';
 import { mergeEpg, loadEpg } from './epg/epg-service.js';
@@ -266,14 +265,36 @@ function applyLibraryPreferences(library, preferences = {}) {
   return visible;
 }
 
-function createDefaultSource() {
-  return {
-    id: 'source-demo',
-    type: 'demo',
-    label: 'FIRATFLIX Demo',
-    proxyMode: 'off',
+function getRuntimeConfig() {
+  return window.FIRATFLIX_RUNTIME_CONFIG || {};
+}
+
+function createSourceFromRuntimeConfig(defaultSource) {
+  if (!defaultSource || !defaultSource.type) return null;
+
+  const source = {
+    id: 'source-runtime',
+    type: defaultSource.type === 'xtream' ? 'xtream' : 'm3u',
+    label: defaultSource.label || 'Default IPTV Source',
+    proxyMode: 'always',
     createdAt: new Date().toISOString(),
-    epgUrl: './demo/guide.xml',
+    epgUrl: defaultSource.epgUrl || ''
+  };
+
+  if (source.type === 'xtream') {
+    if (!defaultSource.baseUrl) return null;
+    return {
+      ...source,
+      baseUrl: defaultSource.baseUrl.replace(/\/$/, ''),
+      username: defaultSource.username || '',
+      password: defaultSource.password || ''
+    };
+  }
+
+  if (!defaultSource.playlistUrl) return null;
+  return {
+    ...source,
+    playlistUrl: defaultSource.playlistUrl,
   };
 }
 
@@ -284,14 +305,16 @@ export class SourceManager {
 
   bootstrap() {
     const saved = this.localStore.read('sources', null);
+    const runtimeSource = createSourceFromRuntimeConfig(getRuntimeConfig().defaultSource || {});
+    const isSavedDemoOnly = saved?.list?.length && saved.list.every((source) => source.type === 'demo');
 
-    if (saved?.list?.length) {
+    if (saved?.list?.length && !isSavedDemoOnly) {
       return saved;
     }
 
     const seed = {
-      list: [createDefaultSource()],
-      activeSourceId: 'source-demo',
+      list: runtimeSource ? [runtimeSource] : [],
+      activeSourceId: runtimeSource ? runtimeSource.id : null,
       diagnostics: null,
       cacheStamp: null,
     };
@@ -307,18 +330,6 @@ export class SourceManager {
 
   getActiveSource(meta) {
     return meta.list.find((source) => source.id === meta.activeSourceId) ?? meta.list[0];
-  }
-
-  ensureDemoSource(meta) {
-    const existingDemo = meta.list.find((source) => source.type === 'demo');
-    const demoSource = existingDemo ?? createDefaultSource();
-    const list = existingDemo ? meta.list : [demoSource, ...meta.list];
-
-    return this.persist({
-      ...meta,
-      list,
-      activeSourceId: demoSource.id,
-    });
   }
 
   async loadLibrary(meta, { force = false, preferences = {} } = {}) {
@@ -339,12 +350,12 @@ export class SourceManager {
     if (!baseLibrary) {
       let library;
 
-      if (activeSource.type === 'demo') {
-        library = await loadDemoLibrary();
-      } else if (activeSource.type === 'xtream') {
+      if (activeSource.type === 'xtream') {
         library = await loadXtreamSource(activeSource);
-      } else {
+      } else if (activeSource.type === 'm3u') {
         library = await loadM3uSource(activeSource);
+      } else {
+        throw new Error('Aktif kaynak tipi desteklenmiyor. Lütfen geçerli bir M3U veya Xtream kaynağı ekleyin.');
       }
 
       if (activeSource.epgUrl) {
@@ -481,13 +492,6 @@ export class SourceManager {
 
   async testSource(source) {
     try {
-      if (source.type === 'demo') {
-        return {
-          status: 'ok',
-          message: 'Bundled demo source hazır.',
-        };
-      }
-
       validateBrowserSource(source);
 
       await fetch(maybeProxyUrl(resolveSourceUrl(source), source), {

@@ -10,6 +10,27 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+function getRuntimeConfig(req) {
+  const backendBaseUrl = process.env.BACKEND_BASE_URL || `${req.protocol}://${req.get('host')}`;
+
+  return {
+    backendBaseUrl,
+    proxyMode: process.env.PROXY_MODE || 'always',
+    forceProxyImages: true,
+    forceProxyStreams: true,
+    forceProxyMetadata: true,
+    defaultSource: {
+      type: process.env.DEFAULT_SOURCE_TYPE || '',
+      playlistUrl: process.env.DEFAULT_PLAYLIST_URL || '',
+      epgUrl: process.env.DEFAULT_EPG_URL || '',
+      baseUrl: process.env.DEFAULT_BASE_URL || '',
+      username: process.env.DEFAULT_USERNAME || '',
+      password: process.env.DEFAULT_PASSWORD || '',
+      label: process.env.DEFAULT_SOURCE_LABEL || 'Default IPTV Source'
+    }
+  };
+}
+
 function createEventFromNodeRequest(req) {
   const origin = `${req.protocol || 'http'}://${req.get?.('host') || req.headers.host || 'localhost'}`;
   const url = new URL(req.originalUrl || req.url || '/', origin);
@@ -40,6 +61,12 @@ async function writeNodeResponse(res, response) {
   const buffer = Buffer.from(await response.arrayBuffer());
   res.end(buffer);
 }
+
+app.get('/runtime-config.js', (req, res) => {
+  const config = getRuntimeConfig(req);
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.send(`window.FIRATFLIX_RUNTIME_CONFIG = ${JSON.stringify(config)};`);
+});
 
 app.use(cors());
 app.use(express.json());

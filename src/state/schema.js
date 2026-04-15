@@ -2,8 +2,8 @@ export function createEmptyLibrary() {
   return {
     status: 'idle',
     loadedAt: null,
-    sourceLabel: 'Demo Library',
-    sourceType: 'demo',
+    sourceLabel: '',
+    sourceType: '',
     diagnostics: null,
     featured: [],
     hero: null,
