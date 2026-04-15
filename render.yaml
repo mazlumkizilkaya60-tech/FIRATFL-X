@@ -1,8 +1,17 @@
 services:
   - type: web
-    name: firatflix-omega-tv
+    name: firatflix
     runtime: node
     plan: free
     autoDeploy: true
     buildCommand: npm install && npm run build
     startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FIRATFLIX_PROXY_MODE
+        value: always
+      - key: FIRATFLIX_FORCE_PROXY_IMAGES
+        value: true
+      - key: FIRATFLIX_FORCE_PROXY_STREAMS
+        value: true

@@ -1,14 +1,6 @@
-<svg width="800" height="160" viewBox="0 0 800 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="g" x1="46" y1="18" x2="140" y2="142" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#9DF0FF"/>
-      <stop offset="0.45" stop-color="#3CC9FF"/>
-      <stop offset="1" stop-color="#104D7D"/>
-    </linearGradient>
-  </defs>
-  <rect x="12" y="12" width="136" height="136" rx="40" fill="#071220" stroke="url(#g)" stroke-width="8"/>
-  <path d="M46 44H112V66H74V84H104V104H74V126H46V44Z" fill="url(#g)"/>
-  <path d="M76 44H112V66H76V44Z" fill="#DFF9FF"/>
-  <text x="214" y="63" fill="#F6FBFF" font-family="Space Grotesk, Segoe UI, sans-serif" font-size="56" font-weight="700" letter-spacing="10">FIRATFLIX</text>
-  <text x="216" y="112" fill="#8ABED4" font-family="Manrope, Segoe UI, sans-serif" font-size="22" font-weight="700" letter-spacing="8">VISUAL ACOUSTIC STREAM</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160" viewBox="0 0 640 160" fill="none">
+  <rect width="640" height="160" rx="28" fill="#0B1220"/>
+  <path d="M48 34H160V56H74V78H148V100H74V126H48V34Z" fill="#E5E7EB"/>
+  <path d="M176 34H202V126H176V34Z" fill="#38BDF8"/>
+  <text x="230" y="92" fill="#E5E7EB" font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="700">FIRATFLIX</text>
 </svg>

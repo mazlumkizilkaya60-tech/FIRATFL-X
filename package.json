@@ -1,23 +1,14 @@
 {
-  "name": "firatflix-omega-tv",
+  "name": "firatflix",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview --host",
-    "start": "npm run build && node server.js",
-    "build:smart-tv": "npm run build && node scripts/build-tv-targets.mjs",
-    "build:tv-shells": "node scripts/build-tv-targets.mjs"
-  },
-  "dependencies": {
-    "hls.js": "^1.5.17",
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "node-fetch": "^3.3.2"
-  },
-  "devDependencies": {
-    "vite": "^5.4.12"
+    "build": "node scripts/build.mjs",
+    "start": "node server.js",
+    "dev": "node server.js"
   }
 }

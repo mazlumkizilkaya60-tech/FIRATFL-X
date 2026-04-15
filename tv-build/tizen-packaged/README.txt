@@ -1,1 +1,0 @@
-Tizen packaged app. Tizen Studio ile package yapip TV Developer Mode uzerinden yukleyin.

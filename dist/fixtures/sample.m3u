@@ -1,0 +1,5 @@
+#EXTM3U x-tvg-url=""
+#EXTINF:-1 tvg-id="firat-test-1" tvg-name="FIRAT Test HLS" tvg-logo="http://127.0.0.1:3100/brand/poster-placeholder.svg" group-title="Test",FIRAT Test HLS
+http://127.0.0.1:3100/fixtures/test.m3u8
+#EXTINF:-1 tvg-id="firat-test-2" tvg-name="FIRAT Test MP4" tvg-logo="http://127.0.0.1:3100/brand/poster-placeholder.svg" group-title="Test",FIRAT Test MP4
+http://127.0.0.1:3100/fixtures/test.mp4
