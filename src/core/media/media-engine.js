@@ -1,4 +1,9 @@
-import { canUseNativeHls, detectSourceType, loadHls, loadMpegts } from './media-capabilities.js';
+import {
+  canUseNativeHls,
+  detectSourceType,
+  loadHls,
+  loadMpegts,
+} from './media-capabilities.js';
 import { buildSourceCandidates } from './source-candidates.js';
 import { formatRuntimeSeconds } from '../utils/format.js';
 
@@ -6,13 +11,28 @@ const resolvedCandidateCache = new Map();
 
 function detectSourceTypeFromResponse(url, contentType = '') {
   const normalizedType = String(contentType).toLowerCase();
-  if (normalizedType.includes('application/vnd.apple.mpegurl') || normalizedType.includes('application/x-mpegurl')) {
+
+  if (
+    normalizedType.includes('application/vnd.apple.mpegurl') ||
+    normalizedType.includes('application/x-mpegurl')
+  ) {
     return 'hls';
   }
+
   if (normalizedType.includes('video/mp2t')) {
     return 'mpegts';
   }
+
   return detectSourceType(url);
+}
+
+function isNotSupportedError(error) {
+  if (!error) return false;
+  return (
+    error.name === 'NotSupportedError' ||
+    String(error.message || '').toLowerCase().includes('supported sources') ||
+    String(error.message || '').toLowerCase().includes('src not supported')
+  );
 }
 
 export class MediaEngine extends EventTarget {
@@ -23,8 +43,9 @@ export class MediaEngine extends EventTarget {
       live: false,
       profile: 'stable',
       autoplay: true,
-      ...options
+      ...options,
     };
+
     this.hls = null;
     this.mpegts = null;
     this.candidates = [];
@@ -42,14 +63,14 @@ export class MediaEngine extends EventTarget {
     this.video.addEventListener('play', () => {
       this.emit('status', {
         state: 'playing',
-        message: this.options.live ? 'Canlı yayın oynuyor' : 'Oynatma sürüyor'
+        message: this.options.live ? 'Canlı yayın oynuyor' : 'Oynatma sürüyor',
       });
     });
 
     this.video.addEventListener('pause', () => {
       this.emit('status', {
         state: 'paused',
-        message: 'Oynatma duraklatıldı'
+        message: 'Oynatma duraklatıldı',
       });
     });
 
@@ -57,24 +78,24 @@ export class MediaEngine extends EventTarget {
       this.emit('progress', {
         currentTime: this.video.currentTime ?? 0,
         duration: this.video.duration ?? 0,
-        label: formatRuntimeSeconds(this.video.currentTime ?? 0)
+        label: formatRuntimeSeconds(this.video.currentTime ?? 0),
       });
     });
 
     this.video.addEventListener('error', () => {
-      this.tryNextCandidate(this.describeVideoError());
+      this.tryNextCandidate(this.describeVideoError()).catch((error) => {
+        this.emit('fatal', { error });
+      });
     });
 
     this.video.addEventListener('loadedmetadata', () => {
-      this.emit('tracks', {
-        audioTracks: this.getAudioTracks()
-      });
+      this.emit('tracks', { audioTracks: this.getAudioTracks() });
     });
 
     this.video.addEventListener('volumechange', () => {
       this.emit('volume', {
         muted: this.video.muted,
-        volume: this.video.volume
+        volume: this.video.volume,
       });
     });
   }
@@ -83,8 +104,9 @@ export class MediaEngine extends EventTarget {
     this.options = {
       ...this.options,
       ...options,
-      live: options.live ?? item.kind === 'live'
+      live: options.live ?? item.kind === 'live',
     };
+
     this.item = item;
     this.candidates = buildSourceCandidates(item);
     this.currentIndex = -1;
@@ -110,36 +132,37 @@ export class MediaEngine extends EventTarget {
 
     const cached = resolvedCandidateCache.get(candidate.url);
     if (cached) {
-      return {
-        ...candidate,
-        ...cached
-      };
+      return { ...candidate, ...cached };
     }
 
     let response;
+
     try {
       response = await fetch(candidate.url, {
         method: 'GET',
-        redirect: 'follow'
+        redirect: 'follow',
       });
 
       const resolved = {
         url: response.url || candidate.url,
-        type: detectSourceTypeFromResponse(response.url || candidate.url, response.headers.get('content-type') || '')
+        type: detectSourceTypeFromResponse(
+          response.url || candidate.url,
+          response.headers.get('content-type') || '',
+        ),
       };
 
       resolvedCandidateCache.set(candidate.url, resolved);
 
       return {
         ...candidate,
-        ...resolved
+        ...resolved,
       };
-    } catch (_error) {
+    } catch {
       return candidate;
     } finally {
       try {
         await response?.body?.cancel?.();
-      } catch (_error) {
+      } catch {
         // no-op
       }
     }
@@ -147,6 +170,7 @@ export class MediaEngine extends EventTarget {
 
   async attachCandidate(index, startTime = 0) {
     const candidate = await this.resolveCandidate(this.candidates[index]);
+
     if (!candidate) {
       const error = new Error('Alternatif kaynak kalmadı.');
       this.emit('fatal', { error });
@@ -159,13 +183,14 @@ export class MediaEngine extends EventTarget {
     this.emit('candidatechange', {
       candidate,
       index,
-      total: this.candidates.length
+      total: this.candidates.length,
     });
 
     const sourceType = candidate.type ?? detectSourceType(candidate.url);
+
     this.emit('status', {
       state: 'loading',
-      message: `${candidate.label} yükleniyor`
+      message: `${candidate.label} yükleniyor`,
     });
 
     if (sourceType === 'hls') {
@@ -188,6 +213,7 @@ export class MediaEngine extends EventTarget {
     }
 
     const Hls = await loadHls();
+
     if (!Hls?.isSupported?.()) {
       await this.tryNextCandidate('Tarayıcı HLS akışını desteklemiyor.');
       return;
@@ -196,46 +222,62 @@ export class MediaEngine extends EventTarget {
     const config = {
       enableWorker: true,
       lowLatencyMode: this.options.live && this.options.profile === 'latency',
-      liveSyncDurationCount: this.options.live ? (this.options.profile === 'latency' ? 2 : 4) : undefined,
-      liveMaxLatencyDurationCount: this.options.live ? (this.options.profile === 'latency' ? 4 : 8) : undefined
+      liveSyncDurationCount: this.options.live
+        ? this.options.profile === 'latency'
+          ? 2
+          : 4
+        : undefined,
+      liveMaxLatencyDurationCount: this.options.live
+        ? this.options.profile === 'latency'
+          ? 4
+          : 8
+        : undefined,
     };
 
-    if (credentials.username && credentials.password) {
+    if (credentials?.username && credentials?.password) {
       config.requestHeaders = {
         'X-Xtream-User': credentials.username,
-        'X-Xtream-Pass': credentials.password
+        'X-Xtream-Pass': credentials.password,
       };
     }
 
     this.hls = new Hls(config);
-
     this.hls.attachMedia(this.video);
-    this.hls.on(Hls.Events.MEDIA_ATTACHED, () => this.hls.loadSource(url));
-    this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+
+    this.hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+      this.hls.loadSource(url);
+    });
+
+    this.hls.on(Hls.Events.MANIFEST_PARSED, async () => {
       if (startTime > 0 && !this.options.live) {
         this.video.currentTime = startTime;
       }
-      this.autoplay();
+
+      await this.autoplay();
       this.scheduleAudioProbe();
       this.emit('tracks', { audioTracks: this.getAudioTracks() });
     });
+
     this.hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
       this.emit('tracks', { audioTracks: this.getAudioTracks() });
     });
-    this.hls.on(Hls.Events.ERROR, (_event, data) => {
+
+    this.hls.on(Hls.Events.ERROR, async (_event, data) => {
       if (!data?.fatal) return;
-      this.tryNextCandidate(this.describeHlsError(data));
+      await this.tryNextCandidate(this.describeHlsError(data));
     });
   }
 
   async attachMpegts(url, startTime, credentials = {}) {
     let mpegts;
+
     try {
       mpegts = await loadMpegts();
-    } catch (error) {
+    } catch {
       await this.tryNextCandidate('MPEG-TS runtime modülü yüklenemedi.');
       return;
     }
+
     if (!mpegts?.getFeatureList?.()?.mseLivePlayback) {
       await this.tryNextCandidate('Tarayıcı MPEG-TS akışını MSE üzerinden oynatamıyor.');
       return;
@@ -245,96 +287,121 @@ export class MediaEngine extends EventTarget {
       type: 'mpegts',
       url,
       isLive: this.options.live,
-      headers: {}
+      headers: {},
     };
 
-    if (credentials.username && credentials.password) {
+    if (credentials?.username && credentials?.password) {
       config.headers['X-Xtream-User'] = credentials.username;
       config.headers['X-Xtream-Pass'] = credentials.password;
     }
 
-    this.mpegts = mpegts.createPlayer(
-      config,
-      {
-        enableWorker: false,
-        lazyLoad: false,
-        enableStashBuffer: true,
-        stashInitialSize: this.options.profile === 'latency' ? 256 * 1024 : 768 * 1024,
-        autoCleanupSourceBuffer: true
-      }
-    );
+    this.mpegts = mpegts.createPlayer(config, {
+      enableWorker: false,
+      lazyLoad: false,
+      enableStashBuffer: true,
+      stashInitialSize: this.options.profile === 'latency' ? 256 * 1024 : 768 * 1024,
+      autoCleanupSourceBuffer: true,
+    });
 
     this.mpegts.attachMediaElement(this.video);
     this.mpegts.load();
-    this.mpegts.on(mpegts.Events.MEDIA_INFO, () => {
+
+    this.mpegts.on(mpegts.Events.MEDIA_INFO, async () => {
       if (startTime > 0 && !this.options.live) {
         this.video.currentTime = startTime;
       }
-      this.autoplay();
+
+      await this.autoplay();
       this.scheduleAudioProbe();
     });
-    this.mpegts.on(mpegts.Events.ERROR, (type, detail) => {
-      this.tryNextCandidate(`MPEG-TS akışı açılamadı: ${detail || type || 'bilinmeyen hata'}`);
+
+    this.mpegts.on(mpegts.Events.ERROR, async (type, detail) => {
+      await this.tryNextCandidate(
+        `MPEG-TS akışı açılamadı: ${detail || type || 'bilinmeyen hata'}`,
+      );
     });
   }
 
   attachNative(url, startTime) {
+    this.video.playsInline = true;
     this.video.src = url;
     this.video.load();
-    this.video.onloadeddata = () => {
+
+    this.video.onloadeddata = async () => {
       if (startTime > 0 && !this.options.live) {
         this.video.currentTime = startTime;
       }
-      this.autoplay();
+
+      await this.autoplay();
       this.scheduleAudioProbe();
       this.video.onloadeddata = null;
     };
   }
 
-  autoplay() {
+  async autoplay() {
     if (!this.options.autoplay) return;
-    this.video
-      .play()
-      .catch(() => {
-        this.video.muted = true;
-        return this.video.play();
-      })
-      .catch(() => {
-        this.emit('status', {
-          state: 'blocked',
-          message: 'Tarayıcı otomatik oynatmayı engelledi. Play ile başlatın.'
-        });
+
+    try {
+      await this.video.play();
+      return;
+    } catch (error) {
+      if (isNotSupportedError(error)) {
+        await this.tryNextCandidate('Kaynak bu tarayıcıda desteklenmiyor.');
+        return;
+      }
+    }
+
+    try {
+      this.video.muted = true;
+      await this.video.play();
+    } catch (error) {
+      if (isNotSupportedError(error)) {
+        await this.tryNextCandidate('Kaynak bu tarayıcıda desteklenmiyor.');
+        return;
+      }
+
+      this.emit('status', {
+        state: 'blocked',
+        message: 'Tarayıcı otomatik oynatmayı engelledi. Play ile başlatın.',
       });
+    }
   }
 
   describeHlsError(data) {
     if (data?.details?.includes('audio')) {
       return 'HLS akışındaki ses izi tarayıcı tarafından çözülemedi.';
     }
+
     return data?.details || data?.type || 'HLS akışı açılırken hata oluştu.';
   }
 
   describeVideoError() {
     const error = this.video.error;
+
     if (!error) return 'Medya oynatılamadı.';
+
     if (error.code === MediaError.MEDIA_ERR_DECODE) {
       return 'Tarayıcı bu kaynağın codec bileşimini çözemedi.';
     }
+
     if (error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
       return 'Kaynak formatı bu tarayıcıda desteklenmiyor.';
     }
+
     return error.message || 'Medya oynatılamadı.';
   }
 
   async tryNextCandidate(reason) {
     this.clearAudioProbe();
+
     const nextIndex = this.currentIndex + 1;
 
     if (nextIndex < this.candidates.length) {
       this.emit('fallback', {
         reason,
-        nextCandidate: this.candidates[nextIndex]
+        nextCandidate: this.candidates[nextIndex],
       });
+
       await this.attachCandidate(nextIndex, this.video.currentTime || 0);
       return;
     }
@@ -347,7 +414,7 @@ export class MediaEngine extends EventTarget {
       return this.hls.audioTracks.map((track, index) => ({
         id: String(index),
         label: track.name || track.lang || `Track ${index + 1}`,
-        selected: this.hls.audioTrack === index
+        selected: this.hls.audioTrack === index,
       }));
     }
 
@@ -357,7 +424,7 @@ export class MediaEngine extends EventTarget {
     return Array.from(nativeTracks).map((track, index) => ({
       id: String(index),
       label: track.label || track.language || `Track ${index + 1}`,
-      selected: track.enabled
+      selected: track.enabled,
     }));
   }
 
@@ -403,23 +470,38 @@ export class MediaEngine extends EventTarget {
 
   seekBy(seconds) {
     if (this.options.live) return;
+
     const duration = this.video.duration || 0;
-    this.video.currentTime = Math.max(0, Math.min(duration, (this.video.currentTime || 0) + seconds));
+    this.video.currentTime = Math.max(
+      0,
+      Math.min(duration, (this.video.currentTime || 0) + seconds),
+    );
   }
 
   seekToRatio(ratio) {
     if (this.options.live) return;
+
     const duration = this.video.duration || 0;
     this.video.currentTime = duration * ratio;
   }
 
   scheduleAudioProbe() {
     this.clearAudioProbe();
+
     this.audioProbeTimer = window.setTimeout(() => {
       this.audioProbeTimer = 0;
+
       if (this.video.paused || this.options.live) return;
-      if ('webkitAudioDecodedByteCount' in this.video && Number(this.video.webkitAudioDecodedByteCount) === 0) {
-        this.tryNextCandidate('Aktif kaynakta çözülebilen bir ses izi bulunamadı.');
+
+      if (
+        'webkitAudioDecodedByteCount' in this.video &&
+        Number(this.video.webkitAudioDecodedByteCount) === 0
+      ) {
+        this.tryNextCandidate('Aktif kaynakta çözülebilen bir ses izi bulunamadı.').catch(
+          (error) => {
+            this.emit('fatal', { error });
+          },
+        );
       }
     }, 3200);
   }
@@ -436,27 +518,32 @@ export class MediaEngine extends EventTarget {
 
   async reset() {
     this.clearAudioProbe();
+
     if (this.hls) {
       this.hls.destroy();
       this.hls = null;
     }
+
     if (this.mpegts) {
       try {
         this.mpegts.pause();
         this.mpegts.unload();
         this.mpegts.detachMediaElement();
-      } catch (error) {
+      } catch {
         // no-op
       }
+
       this.mpegts.destroy();
       this.mpegts = null;
     }
+
     this.video.pause();
     this.video.removeAttribute('src');
+    this.video.srcObject = null;
     this.video.load();
   }
 
   async destroy() {
     await this.reset();
   }
-}
+    }
