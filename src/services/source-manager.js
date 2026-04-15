@@ -13,16 +13,16 @@ const cacheDb = createKeyValueDatabase('firatflix-cache');
 const CATALOG_CACHE_VERSION = 'v4-force-proxy-http';
 
 const ADULT_PATTERNS = [
-  /\bxxx\b/i,
-  /\badult\b/i,
-  /\bporn(?:o)?\b/i,
-  /\berotic\b/i,
-  /\berotik\b/i,
-  /\b(?:18\+|\+18)\b/i,
-  /\byetiskin\b/i,
-  /\bplayboy\b/i,
-  /\bbrazzers\b/i,
-  /\bhustler\b/i,
+  /xxx/i,
+  /adult/i,
+  /porn(?:o)?/i,
+  /erotic/i,
+  /erotik/i,
+  /(?:18\+|\+18)/i,
+  /yetiskin/i,
+  /playboy/i,
+  /brazzers/i,
+  /hustler/i,
 ];
 
 function resolveSourceUrl(source) {
@@ -448,8 +448,7 @@ export class SourceManager {
       return library;
     }
 
-    const cachedBaseLibrary =
-      (await cacheDb.get(getCatalogCacheKey(activeSource.id))) || library;
+    const cachedBaseLibrary = (await cacheDb.get(getCatalogCacheKey(activeSource.id))) || library;
 
     const target = cachedBaseLibrary.lookup?.[seriesId] || library.lookup?.[seriesId];
 
@@ -527,4 +526,4 @@ export class SourceManager {
       sourceType: library.sourceType,
     };
   }
-}
+                   }
